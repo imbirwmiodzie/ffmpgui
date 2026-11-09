@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ffmpgui — FFmpeg w przeglądarce</title>
+  <meta name="description" content="Przyjazne studio wideo i audio oparte na FFmpeg, działające w całości w przeglądarce. Konwersja, kompresja, przycinanie, GIF-y, napisy, znak wodny i więcej – z wyjaśnieniem każdego polecenia.">
+  <meta name="theme-color" content="#0d0f17">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="ffmpgui – strona główna">
+        <span class="brand-mark"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><path d="M12 9l12 7-12 7z" fill="#fff"/></svg></span>
+        <span>ffmp<b>gui</b></span>
+      </a>
+      <nav class="nav-links" aria-label="Sekcje">
+        <a href="#jak-to-dziala">Jak to działa</a>
+        <a href="#funkcje">Funkcje</a>
+        <a href="#slowniczek">Słowniczek</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <span class="engine-pill" id="enginePill" data-state="idle"><i></i><span>Silnik: niezaładowany</span></span>
+      <a class="btn btn-primary btn-sm" href="#studio">Otwórz studio</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- ───────────────────────── HERO -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">FFmpeg · WebAssembly · 100% lokalnie</p>
+          <h1>Najpotężniejsze narzędzie do wideo.<br><span class="grad">Wreszcie z ludzką twarzą.</span></h1>
+          <p class="lead">ffmpgui to wizualne studio dla <b>FFmpeg</b> – silnika, który napędza YouTube’a, VLC i większość narzędzi wideo na świecie. Konwertuj, kompresuj, tnij, rób GIF-y, wypalaj napisy – w zwykłej przeglądarce, bez instalacji i <b>bez wysyłania plików gdziekolwiek</b>.</p>
+          <p class="lead small">A przy okazji się ucz: każde polecenie jest rozłożone na części i wyjaśnione, a każda funkcja ma demo na przykładowym filmie.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="#funkcje" id="heroDemo"><span>Zobacz dema funkcji</span></a>
+            <a class="btn btn-ghost btn-lg" href="#studio">Wrzuć własny plik</a>
+          </div>
+          <ul class="hero-facts">
+            <li><strong id="featCount">20</strong><span>funkcji z demem</span></li>
+            <li><strong>0 B</strong><span>wysłanych na serwer</span></li>
+            <li><strong>0</strong><span>instalacji</span></li>
+          </ul>
+        </div>
+        <div class="hero-visual" aria-label="Przykładowe polecenia FFmpeg z wyjaśnieniem">
+          <div class="term">
+            <div class="term-bar"><i></i><i></i><i></i><span id="heroTitle">Kompresja</span></div>
+            <div class="term-body">
+              <div class="cmd" id="heroCmd"></div>
+              <ol class="legend legend-compact" id="heroLegend"></ol>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── JAK TO DZIAŁA -->
+    <section class="section" id="jak-to-dziala">
+      <div class="wrap">
+        <p class="eyebrow">Explainer</p>
+        <h2>Jak FFmpeg przetwarza plik?</h2>
+        <p class="section-lead">Każde polecenie FFmpeg to ta sama taśma produkcyjna. Kliknij etap, żeby dowiedzieć się, co robi. Kolory etapów odpowiadają kolorom fragmentów polecenia w studiu.</p>
+
+        <div class="pipeline" id="pipeline">
+          <div class="pl-file"><span class="pl-ext">.mov</span>plik wejściowy</div>
+          <button class="pl-stage" data-k="in" data-stage="demux"><b>Demuxer</b><small>rozpakowuje kontener</small></button>
+          <button class="pl-stage pl-codec" data-k="in" data-stage="decode"><b>Dekoder</b><small>dane → surowe klatki</small></button>
+          <button class="pl-stage pl-codec" data-k="filter" data-stage="filter"><b>Filtry</b><small>zmieniają klatki</small></button>
+          <button class="pl-stage pl-codec" data-k="video" data-stage="encode"><b>Enkoder</b><small>klatki → kompresja</small></button>
+          <button class="pl-stage" data-k="out" data-stage="mux"><b>Muxer</b><small>pakuje do kontenera</small></button>
+          <div class="pl-file"><span class="pl-ext">.mp4</span>plik wyjściowy</div>
+          <div class="pl-bypass" aria-hidden="true"><span>-c copy: pomiń dekodowanie i kodowanie</span></div>
+        </div>
+        <div class="pl-controls">
+          <label class="switch"><input type="checkbox" id="bypassToggle"><span></span> Pokaż ścieżkę <code>-c copy</code> (stream copy)</label>
+        </div>
+        <div class="pl-desc card" id="plDesc" aria-live="polite"></div>
+
+        <div class="anatomy card">
+          <h3>Anatomia polecenia</h3>
+          <p class="muted">Najedź na dowolny fragment, żeby zobaczyć, za co odpowiada. Kolejność ma znaczenie: <b>opcje przed <code>-i</code> dotyczą wejścia</b>, opcje po nim – wyjścia, a na końcu zawsze nazwa pliku wynikowego.</p>
+          <div class="cmd cmd-lg" id="anatomyCmd"></div>
+          <ol class="legend" id="anatomyLegend"></ol>
+        </div>
+
+        <div class="how-grid">
+          <div class="how-card">
+            <span class="how-ico" data-icon="cpu"></span>
+            <h3>FFmpeg skompilowany do WebAssembly</h3>
+            <p>Ten sam kod C co w terminalu, przetłumaczony na WebAssembly (~31 MB, pobierany raz i trzymany w cache przeglądarki).</p>
+          </div>
+          <div class="how-card">
+            <span class="how-ico" data-icon="sparkles"></span>
+            <h3>Pracuje w Web Workerze</h3>
+            <p>Obliczenia idą w osobnym wątku, więc strona nie zamarza. Pliki trafiają do wirtualnego dysku w pamięci RAM (MEMFS).</p>
+          </div>
+          <div class="how-card">
+            <span class="how-ico" data-icon="shield"></span>
+            <h3>Twoje pliki nie opuszczają komputera</h3>
+            <p>Nie ma żadnego serwera, który by je odbierał. Po załadowaniu silnika możesz nawet odłączyć internet.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── FUNKCJE -->
+    <section class="section section-alt" id="funkcje">
+      <div class="wrap">
+        <p class="eyebrow">Funkcje</p>
+        <h2>Wszystko, czego zwykle szukasz w Google jako „ffmpeg jak…”</h2>
+        <p class="section-lead">Każda karta ma <b>demo</b>: ffmpgui wygeneruje 6-sekundowy film testowy (kolorowe pasy, licznik czasu i pisk 440 Hz), przepuści go przez daną funkcję i pokaże wynik obok oryginału – razem z poleceniem i wyjaśnieniem każdej opcji.</p>
+        <div class="feature-filter" id="featureFilter" role="tablist" aria-label="Filtruj funkcje"></div>
+        <div class="feature-grid" id="featureGrid"></div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── STUDIO -->
+    <section class="section" id="studio">
+      <div class="wrap wrap-wide">
+        <div class="studio-head">
+          <div>
+            <p class="eyebrow">Studio</p>
+            <h2>Studio</h2>
+          </div>
+          <p class="muted studio-hint">Wybierz funkcję z listy, wrzuć plik (albo użyj przykładowego), ustaw parametry i uruchom. Polecenie poniżej aktualizuje się na żywo.</p>
+        </div>
+
+        <div class="studio">
+          <aside class="studio-nav" id="studioNav" aria-label="Lista funkcji"></aside>
+
+          <div class="studio-main">
+            <!-- źródło -->
+            <div class="source card" id="dropzone">
+              <div class="source-info" id="sourceInfo">
+                <div class="source-empty">
+                  <span class="source-ico" data-icon="upload"></span>
+                  <div>
+                    <b>Brak pliku wejściowego</b>
+                    <p class="muted">Przeciągnij tu plik wideo/audio albo użyj pliku przykładowego.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="source-actions">
+                <label class="btn btn-ghost"><input type="file" id="fileInput" accept="video/*,audio/*,image/*,.mkv,.mov,.avi,.flv,.ts,.m4a,.flac,.opus" hidden>Wybierz plik…</label>
+                <button class="btn btn-ghost" id="sampleBtn">Plik przykładowy</button>
+              </div>
+              <div class="engine-load" id="engineLoad" hidden>
+                <div class="bar"><i id="engineBar"></i></div>
+                <span id="engineText">Pobieranie FFmpeg.wasm…</span>
+              </div>
+              <div class="drop-overlay">Upuść plik, aby go wczytać</div>
+            </div>
+
+            <!-- funkcja -->
+            <article class="feature" id="feature">
+              <header class="feature-head">
+                <span class="feature-ico" id="fIcon"></span>
+                <div>
+                  <h3 id="fTitle"></h3>
+                  <p class="muted" id="fTagline"></p>
+                </div>
+              </header>
+
+              <div class="feature-cols">
+                <div class="feature-explain">
+                  <div class="tabs" role="tablist">
+                    <button role="tab" class="tab active" data-tab="what" aria-selected="true">Co to robi</button>
+                    <button role="tab" class="tab" data-tab="how" aria-selected="false">Jak to działa w FFmpeg</button>
+                  </div>
+                  <div class="tab-panel prose" id="fWhat"></div>
+                  <div class="tab-panel prose" id="fHow" hidden></div>
+                  <div class="demo-box">
+                    <div>
+                      <b>Demo</b>
+                      <p id="fDemo"></p>
+                    </div>
+                    <button class="btn btn-accent" id="demoBtn"><span data-icon="play"></span>Uruchom demo</button>
+                  </div>
+                </div>
+
+                <div class="feature-controls">
+                  <form class="params" id="params" autocomplete="off"></form>
+                  <div class="cmd-panel">
+                    <div class="cmd-panel-head">
+                      <span>Polecenie</span>
+                      <button class="icon-btn" id="copyCmd" title="Kopiuj polecenie" aria-label="Kopiuj polecenie"></button>
+                    </div>
+                    <div class="cmd" id="cmd"></div>
+                    <ol class="legend" id="legend"></ol>
+                  </div>
+                  <div class="run-row">
+                    <button class="btn btn-primary btn-lg" id="runBtn"><span data-icon="play"></span>Uruchom</button>
+                    <p class="form-error" id="formError" role="alert"></p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <!-- wynik -->
+            <section class="result card" id="result" hidden aria-live="polite">
+              <div class="progress" id="progress" hidden>
+                <div class="progress-top"><span id="progressLabel">Przetwarzanie…</span><span id="progressPct"></span></div>
+                <div class="bar"><i id="progressBar"></i></div>
+              </div>
+              <div id="resultBody"></div>
+            </section>
+
+            <details class="log card" id="logBox">
+              <summary>Konsola FFmpeg <span class="muted">(pełny log – przydaje się, gdy coś pójdzie nie tak)</span></summary>
+              <pre id="log"></pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── SŁOWNICZEK -->
+    <section class="section section-alt" id="slowniczek">
+      <div class="wrap">
+        <p class="eyebrow">Słowniczek</p>
+        <h2>10 pojęć, które odczarowują wideo</h2>
+        <div class="glossary">
+          <div class="gl"><h3>Kontener</h3><p>„Pudełko” na strumienie: MP4, MKV, WebM, MOV. Określa, jak dane są ułożone w pliku, ale nie jak są skompresowane. Rozszerzenie pliku zwykle mówi o kontenerze.</p></div>
+          <div class="gl"><h3>Kodek</h3><p>Algorytm kompresji obrazu lub dźwięku: H.264, H.265, VP9, AV1, AAC, MP3, Opus. <b>Dekoder</b> rozpakowuje, <b>enkoder</b> pakuje. W FFmpeg wybierasz go opcją <code>-c:v</code> / <code>-c:a</code>.</p></div>
+          <div class="gl"><h3>Strumień</h3><p>Jedna ścieżka w kontenerze – obraz, dźwięk, napisy. Plik może mieć ich kilka (np. dwie ścieżki językowe). <code>0:v</code> = obraz z wejścia nr 0, <code>0:a</code> = dźwięk.</p></div>
+          <div class="gl"><h3>Bitrate</h3><p>Ile danych przypada na sekundę materiału (np. 5 Mb/s). Rozmiar pliku ≈ bitrate × czas. Wyższy bitrate = zwykle lepsza jakość.</p></div>
+          <div class="gl"><h3>CRF</h3><p>Tryb „stałej jakości” w x264/x265. Zamiast bitrate’u podajesz, jak dobrze ma wyglądać wynik (niżej = lepiej). Enkoder sam rozdziela bity między sceny.</p></div>
+          <div class="gl"><h3>Preset</h3><p>Kompromis szybkość ↔ wydajność kompresji. <code>ultrafast</code> koduje błyskawicznie, ale daje większe pliki; <code>slow</code> myśli dłużej i oszczędza miejsce.</p></div>
+          <div class="gl"><h3>Klatka kluczowa</h3><p>Pełny obraz (I-frame). Pozostałe klatki zapisują tylko zmiany względem sąsiednich. Dlatego cięcie bez ponownego kodowania „przeskakuje” do najbliższej klatki kluczowej.</p></div>
+          <div class="gl"><h3>Filtr</h3><p>Operacja na zdekodowanych klatkach lub próbkach: skalowanie, kadrowanie, kolory, tekst. Łańcuch: <code>-vf "scale=1280:-2,hflip"</code>. Wiele wejść/wyjść: <code>-filter_complex</code>.</p></div>
+          <div class="gl"><h3>Stream copy</h3><p><code>-c copy</code> przepisuje skompresowane dane bez dekodowania. Natychmiastowe i bezstratne – ale nie da się wtedy użyć filtrów ani zmienić kodeka.</p></div>
+          <div class="gl"><h3>PTS</h3><p>Presentation Time Stamp – znacznik „kiedy pokazać tę klatkę”. Zmieniając PTS (filtr <code>setpts</code>), przyspieszasz albo zwalniasz wideo.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── FAQ -->
+    <section class="section" id="faq">
+      <div class="wrap narrow">
+        <p class="eyebrow">FAQ</p>
+        <h2>Pytania i ograniczenia</h2>
+        <details class="faq"><summary>Czy moje pliki są gdzieś wysyłane?</summary><p>Nie. Z internetu pobierany jest tylko sam silnik FFmpeg (raz, potem z cache) i ewentualnie czcionka do napisów. Plik wideo jest wczytywany do pamięci przeglądarki i tam przetwarzany. Możesz to sprawdzić w zakładce „Sieć” narzędzi deweloperskich.</p></details>
+        <details class="faq"><summary>Jak duże pliki mogę przetwarzać?</summary><p>WebAssembly ma limit pamięci ok. 2 GB, a plik wejściowy i wynik muszą zmieścić się w niej jednocześnie. W praktyce wygodnie pracuje się z plikami do kilkuset MB. Przy większych lepiej użyć natywnego FFmpeg – a polecenie możesz skopiować prosto ze studia.</p></details>
+        <details class="faq"><summary>Dlaczego jest wolniej niż natywny FFmpeg?</summary><p>Wersja przeglądarkowa działa na jednym wątku, bez ręcznie optymalizowanego asemblera i bez akceleracji GPU. Zwykle to 5–20× wolniej niż w terminalu. Dla krótkich klipów nie ma to znaczenia; dla długich – wybieraj szybsze presety (<code>ultrafast</code>, <code>veryfast</code>).</p></details>
+        <details class="faq"><summary>W jakich przeglądarkach działa?</summary><p>W aktualnych wersjach Chrome, Edge, Firefox, Safari i Opery – na komputerze i (wolniej) na telefonie. Potrzebne są WebAssembly i moduły ES w Web Workerach.</p></details>
+        <details class="faq"><summary>Czy mogę używać tych poleceń w terminalu?</summary><p>Tak! Przycisk kopiowania w studiu daje gotowe polecenie <code>ffmpeg …</code>. Zmień tylko nazwy plików na swoje. To dobry sposób na naukę FFmpeg.</p></details>
+        <details class="faq"><summary>Jak uruchomić ffmpgui u siebie?</summary><p>To statyczna strona – wystarczy dowolny serwer HTTP, np. <code>python3 -m http.server</code> w katalogu projektu i adres <code>http://localhost:8000</code>. Otwieranie <code>index.html</code> bezpośrednio z dysku (<code>file://</code>) nie zadziała, bo przeglądarki blokują wtedy Web Workery z modułami.</p></details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <span>ffmpgui · zbudowane na <a href="https://ffmpeg.org" target="_blank" rel="noopener">FFmpeg</a> i <a href="https://github.com/ffmpegwasm/ffmpeg.wasm" target="_blank" rel="noopener">ffmpeg.wasm</a></span>
+      <span class="muted">FFmpeg jest znakiem towarowym Fabrice’a Bellarda. Rdzeń wasm na licencji GPL-2.0+.</span>
+    </div>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
