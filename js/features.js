@@ -413,7 +413,7 @@ export const FEATURES = [
       <p><code>-map</code> wybiera, które strumienie trafią do pliku: wynik grafu i dźwięk z pierwszego wejścia (znak <code>?</code> = jeśli istnieje).</p>`,
     demo: { params: { pos: 'br', scale: 22, opacity: 0.8 }, note: 'Demo generuje w przeglądarce przykładowe logo „ffmpgui” i nakłada je w prawym dolnym rogu z 80% kryciem.' },
     params: [
-      { id: 'logo', label: 'Logo (PNG/JPG)', type: 'file', accept: 'image/*', hint: 'Bez pliku zostanie użyte przykładowe logo.' },
+      { id: 'logo', label: 'Logo (PNG/JPG)', type: 'file', accept: 'image/*', hint: 'Bez pliku zostanie użyte przykładowe logo.', fallback: 'logo.png', make: 'logo', makeLabel: 'przykładowe logo' },
       { id: 'pos', label: 'Pozycja', type: 'select', default: 'br', options: [['tl', 'Lewy górny'], ['tr', 'Prawy górny'], ['bl', 'Lewy dolny'], ['br', 'Prawy dolny'], ['c', 'Środek']] },
       { id: 'scale', label: 'Szerokość logo (% szerokości wideo)', type: 'range', min: 5, max: 60, step: 1, default: 20 },
       { id: 'opacity', label: 'Krycie', type: 'range', min: 0.1, max: 1, step: 0.05, default: 0.8 },
@@ -423,7 +423,7 @@ export const FEATURES = [
       const lw = even((W * p.scale) / 100);
       const m = Math.max(8, Math.round(W * 0.025));
       const pos = { tl: [m, m], tr: [`W-w-${m}`, m], bl: [m, `H-h-${m}`], br: [`W-w-${m}`, `H-h-${m}`], c: ['(W-w)/2', '(H-h)/2'] }[p.pos];
-      const logo = ctx.files.logo || 'logo.png';
+      const logo = ctx.files.logo;
       return {
         segs: [IN(ctx, 'Wejście nr 0: wideo.'),
           seg('in', ['-i', logo], 'Wejście nr 1: obrazek z logo.'),
@@ -686,6 +686,254 @@ export const FEATURES = [
       };
     },
     check: VIDEO_ONLY,
+  },
+
+  // ─────────────────────────────── NOWE: obraz
+  {
+    id: 'chromakey',
+    group: 'image',
+    icon: 'stamp',
+    title: 'Green screen (kluczowanie)',
+    tagline: 'Usuń zielone (lub niebieskie) tło i podstaw własne.',
+    explain: `<p>Klasyczna technika z telewizji i YouTube’a: nagrywasz osobę na jednolitym, jaskrawym tle, a potem zamieniasz ten kolor na dowolne tło – kolor, zdjęcie albo inny film.</p>
+      <p><b>Podobieństwo</b> mówi, jak bardzo kolor może się różnić od wzorca, żeby jeszcze zniknął. <b>Wygładzanie</b> robi miękkie, półprzezroczyste krawędzie zamiast „poszarpanych”.</p>`,
+    how: `<p>Filtr <code>chromakey</code> porównuje kolor każdego piksela w przestrzeni YUV z kolorem klucza i ustawia przezroczystość (kanał alfa). <code>despill</code> usuwa zieloną poświatę, która odbija się od tła na włosach i ramionach.</p>
+      <p>Tło tworzymy źródłem <code>color</code> wewnątrz grafu (albo drugim wejściem z obrazem), a <code>overlay</code> kładzie wykluczowany obraz na wierzch. <code>shortest=1</code> kończy wynik razem z filmem.</p>
+      <p>Nie masz green screenu? Zobacz <a href="#ai">usuwanie tła modelem AI</a> – działa na dowolnym tle.</p>`,
+    demo: { params: { key: '0x00FF00', similarity: 0.28, blend: 0.06, bg: 'color', bgcolor: '0x2e1065', despill: false }, note: 'Wideo testowe ma zielony pas – demo traktuje go jak green screen i podmienia na fiolet. Zwróć uwagę, że żółty i turkusowy (które też zawierają zieleń) zostają nietknięte.' },
+    params: [
+      { id: 'key', label: 'Kolor klucza', type: 'select', default: '0x00FF00', options: [['0x00FF00', 'Zielony (green screen)'], ['0x0000FF', 'Niebieski (blue screen)'], ['0xFF00FF', 'Magenta']] },
+      { id: 'similarity', label: 'Podobieństwo', type: 'range', min: 0.01, max: 0.6, step: 0.01, default: 0.15 },
+      { id: 'blend', label: 'Wygładzanie krawędzi', type: 'range', min: 0, max: 0.3, step: 0.01, default: 0.05 },
+      { id: 'despill', label: 'Usuń zieloną poświatę (despill)', type: 'toggle', default: true },
+      { id: 'bg', label: 'Nowe tło', type: 'select', default: 'color', options: [['color', 'Jednolity kolor'], ['image', 'Obraz (wybierz plik)']] },
+      { id: 'bgcolor', label: 'Kolor tła', type: 'select', default: '0x0f172a', options: [['0x0f172a', 'Granat'], ['0x2e1065', 'Fiolet'], ['0xffffff', 'Biel'], ['0x000000', 'Czerń'], ['0xf59e0b', 'Pomarańcz']], when: (p) => p.bg === 'color' },
+      { id: 'bgimg', label: 'Obraz tła', type: 'file', accept: 'image/*', when: (p) => p.bg === 'image', hint: 'Bez pliku: wygenerowany gradient.', fallback: 'bg_demo.png', makeLabel: 'tło z gradientem',
+        make: (c) => ['-f', 'lavfi', '-i', `gradients=s=${c.info.width || 640}x${c.info.height || 360}:c0=0x1e3a8a:c1=0xdb2777:x0=0:y0=0:x1=${c.info.width || 640}:y1=${c.info.height || 360}`, '-frames:v', '1', 'bg_demo.png'] },
+    ],
+    build: (p, ctx) => {
+      const W = ctx.info.width || 1280;
+      const H = ctx.info.height || 720;
+      const fps = ctx.info.fps || 25;
+      const key = `chromakey=${p.key}:${num(p.similarity)}:${num(p.blend)}${p.despill && p.key === '0x00FF00' ? ',despill=type=green' : ''}`;
+      const segs = [IN(ctx)];
+      let graph;
+      if (p.bg === 'image') {
+        segs.push(seg('in', ['-loop', '1', '-i', ctx.files.bgimg], 'Wejście nr 1: obraz tła, zapętlony (-loop 1), żeby trwał tyle co film.'));
+        graph = `[1:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}[bg];[0:v]${key}[fg];[bg][fg]overlay=shortest=1[v]`;
+      } else {
+        graph = `color=c=${p.bgcolor}:s=${W}x${H}:r=${fps}[bg];[0:v]${key}[fg];[bg][fg]overlay=shortest=1[v]`;
+      }
+      segs.push(seg('filter', ['-filter_complex', graph], `Graf: przygotuj tło [bg] ${p.bg === 'image' ? '(obraz dopasowany do kadru)' : `(kolor ${p.bgcolor})`}, zrób przezroczystym kolor ${p.key} z podobieństwem ${num(p.similarity)} i wygładzeniem ${num(p.blend)}${p.despill && p.key === '0x00FF00' ? ', usuń zieloną poświatę' : ''}, a potem połóż obraz na tle.`),
+        seg('out', ['-map', '[v]', '-map', '0:a?'], 'Zapisz obraz z grafu i dźwięk z oryginału.'),
+        X264('veryfast', 20), ACOPY(ctx), FASTSTART, OUT('output.mp4'));
+      return { segs: segs.filter(Boolean), out: { file: 'output.mp4', kind: 'video' }, duration: dur(ctx) };
+    },
+    check: VIDEO_ONLY,
+  },
+
+  {
+    id: 'enhance',
+    group: 'image',
+    icon: 'sparkles',
+    title: 'Odszumianie i wyostrzanie',
+    tagline: 'Mniej ziarna z nagrań nocnych, ostrzejsze detale.',
+    explain: `<p>Nagrania przy słabym świetle mają „ziarno” (szum), a materiał z kompresji bywa miękki. Odszumianie wygładza przypadkowe drgania pikseli, a wyostrzanie podkreśla krawędzie.</p>
+      <p>Tryb <b>porównania</b> składa w jednym kadrze obraz przed (lewo) i po (prawo) – najłatwiej wtedy ocenić efekt i nie przesadzić.</p>`,
+    how: `<p><code>hqdn3d</code> to szybki odszumiacz „3D”: uśrednia piksele w przestrzeni (sąsiedzi) i w czasie (poprzednie klatki). <code>nlmeans</code> (non-local means) szuka podobnych fragmentów w całym otoczeniu – lepszy, ale wielokrotnie wolniejszy.</p>
+      <p><code>unsharp</code> to klasyczna „maska wyostrzająca”: odejmuje rozmytą kopię, żeby wzmocnić krawędzie. <code>cas</code> (Contrast Adaptive Sharpening, z AMD FidelityFX) wyostrza mocniej tam, gdzie kontrast jest niski, więc mniej „przepala” krawędzie.</p>
+      <p>Porównanie: <code>split</code> robi dwie kopie strumienia, jedną obrabiamy, a <code>hstack</code> stawia je obok siebie.</p>`,
+    demo: { params: { addnoise: true, denoise: 'hqdn3d=6:5:8:7', sharpen: 'unsharp=5:5:0.6', compare: true }, note: 'Demo najpierw dodaje sztuczny szum (filtr noise), a potem go usuwa. W podglądzie „po”: lewa połowa zaszumiona, prawa – odszumiona i lekko wyostrzona.' },
+    params: [
+      { id: 'denoise', label: 'Odszumianie', type: 'select', default: 'hqdn3d=4:3:6:4.5', options: [['', 'brak'], ['hqdn3d=4:3:6:4.5', 'hqdn3d – lekkie'], ['hqdn3d=6:5:8:7', 'hqdn3d – mocne'], ['nlmeans=s=3:p=5:r=9', 'nlmeans – najlepsze (wolne)']] },
+      { id: 'sharpen', label: 'Wyostrzanie', type: 'select', default: 'unsharp=5:5:0.6', options: [['', 'brak'], ['unsharp=5:5:0.6', 'unsharp – lekkie'], ['unsharp=5:5:1.2', 'unsharp – mocne'], ['cas=0.6', 'CAS (AMD FidelityFX)']] },
+      { id: 'compare', label: 'Porównanie w jednym kadrze (przed | po)', type: 'toggle', default: false },
+      { id: 'addnoise', label: 'Najpierw dodaj sztuczny szum (do testów)', type: 'toggle', default: false },
+    ],
+    validate: (p) => (!p.denoise && !p.sharpen ? 'Wybierz odszumianie albo wyostrzanie.' : null),
+    build: (p, ctx) => {
+      const fx = [p.denoise, p.sharpen].filter(Boolean).join(',');
+      const pre = p.addnoise ? 'noise=alls=20:allf=t+u,' : '';
+      const graph = p.compare ? `[0:v]${pre}split[a][b];[b]${fx}[b2];[a][b2]hstack[v]` : `[0:v]${pre}${fx}[v]`;
+      return {
+        segs: [IN(ctx),
+          seg('filter', ['-filter_complex', graph], `${p.addnoise ? 'Dodaj szum (noise) do testu, ' : ''}${p.compare ? 'rozdziel strumień na dwie kopie, ' : ''}zastosuj ${fx.replace(/=.*?(,|$)/g, '$1').replace(',', ' + ')}${p.compare ? ' na prawej kopii i zestaw je obok siebie (hstack)' : ''}.`),
+          seg('out', ['-map', '[v]', '-map', '0:a?'], 'Obraz z grafu + oryginalny dźwięk.'),
+          X264('veryfast', 23), ACOPY(ctx), FASTSTART, OUT('output.mp4')].filter(Boolean),
+        out: { file: 'output.mp4', kind: 'video' }, duration: dur(ctx),
+      };
+    },
+    check: VIDEO_ONLY,
+  },
+
+  {
+    id: 'stabilize',
+    group: 'image',
+    icon: 'crop',
+    title: 'Stabilizacja obrazu',
+    tagline: 'Uspokój drżące nagranie z ręki.',
+    explain: `<p>Nagranie z ręki, z roweru czy z drona potrafi się trząść. Stabilizacja wykrywa, o ile przesunął się cały obraz między klatkami, i kompensuje ten ruch przeciwnym przesunięciem.</p>
+      <p>Brzegi kadru, które „odsłoniły się” przy kompensacji, można wypełnić lustrzanym odbiciem, rozmyciem albo czernią.</p>`,
+    how: `<p>Filtr <code>deshake</code> dzieli klatkę na bloki i szuka ich przesunięcia względem poprzedniej (estymacja ruchu w oknie <code>rx</code>×<code>ry</code> pikseli). Z tych wektorów liczy globalny ruch kamery i odwraca go.</p>
+      <p>W natywnym FFmpeg jest też dwuprzebiegowy <code>vidstabdetect</code> + <code>vidstabtransform</code> (biblioteka vid.stab) – dokładniejszy, ale nie ma go w wersji przeglądarkowej.</p>
+      <p>Uwaga: w niektórych wydaniach natywnego FFmpeg (np. 6.1 z Ubuntu) <code>deshake</code> tuż po <code>crop</code> w jednym grafie potrafi się wysypać – wtedy zrób „roztrzęsienie” i stabilizację w dwóch osobnych poleceniach.</p>`,
+    demo: { params: { shake: true, rx: 32, edge: 'mirror', compare: true }, note: 'Demo sztucznie „roztrzęsa” wideo (filtr crop z przesunięciem zależnym od numeru klatki), a potem je stabilizuje. Lewa połowa: drżący obraz, prawa: po deshake.' },
+    params: [
+      { id: 'rx', label: 'Zasięg wyszukiwania ruchu (px)', type: 'range', min: 16, max: 64, step: 8, default: 32 },
+      { id: 'edge', label: 'Wypełnienie brzegów', type: 'select', default: 'mirror', options: [['mirror', 'Lustrzane odbicie'], ['clamp', 'Rozciągnięcie krawędzi'], ['blank', 'Czerń'], ['original', 'Oryginalny obraz']] },
+      { id: 'compare', label: 'Porównanie w jednym kadrze (przed | po)', type: 'toggle', default: false },
+      { id: 'shake', label: 'Najpierw sztucznie roztrzęś (do testów)', type: 'toggle', default: false },
+    ],
+    build: (p, ctx) => {
+      const pre = p.shake ? 'crop=w=iw-48:h=ih-48:x=24+20*sin(n*1.7):y=24+16*cos(n*2.3),' : '';
+      const ds = `deshake=rx=${p.rx}:ry=${p.rx}:edge=${p.edge}`;
+      const graph = p.compare ? `[0:v]${pre}split[a][b];[b]${ds}[b2];[a][b2]hstack[v]` : `[0:v]${pre}${ds}[v]`;
+      return {
+        segs: [IN(ctx),
+          seg('filter', ['-filter_complex', graph], `${p.shake ? 'Roztrzęś obraz (crop przesuwany sinusem), ' : ''}${p.compare ? 'zrób dwie kopie, ' : ''}stabilizuj filtrem deshake (szukanie ruchu ±${p.rx} px, brzegi: ${p.edge})${p.compare ? ' i zestaw przed | po' : ''}.`),
+          seg('out', ['-map', '[v]', '-map', '0:a?'], 'Obraz z grafu + oryginalny dźwięk.'),
+          X264('veryfast', 20), ACOPY(ctx), FASTSTART, OUT('output.mp4')].filter(Boolean),
+        out: { file: 'output.mp4', kind: 'video' }, duration: dur(ctx),
+      };
+    },
+    check: VIDEO_ONLY,
+  },
+
+  {
+    id: 'pip',
+    group: 'image',
+    icon: 'grid',
+    title: 'Obraz w obrazie (PiP)',
+    tagline: 'Druga kamera w rogu – reakcje, tutoriale, gameplay z twarzą.',
+    explain: `<p>Nakłada pomniejszone drugie wideo (albo zdjęcie) na główny obraz – jak kamerka streamera w rogu gry, prowadzący w tutorialu czy „reaction video”.</p>`,
+    how: `<p>Dwa wejścia, więc <code>-filter_complex</code>. Drugi strumień <code>[1:v]</code> skalujemy do ułamka szerokości głównego filmu, opcjonalnie dodajemy ramkę filtrem <code>pad</code>, a <code>overlay</code> kładzie go w wybranym rogu. <code>eof_action=pass</code> sprawia, że gdy drugi klip się skończy, okienko po prostu znika.</p>`,
+    demo: { params: { pos: 'tr', size: 32, border: true }, note: 'Bez własnego pliku demo tworzy „drugą kamerę” z odbitego, czarno-białego fragmentu tego samego filmu i kładzie ją w prawym górnym rogu z białą ramką.' },
+    params: [
+      { id: 'second', label: 'Wideo lub zdjęcie do okienka', type: 'file', accept: 'video/*,image/*', probe: true, hint: 'Bez pliku: czarno-białe lustrzane odbicie bieżącego filmu.', fallback: 'pip_demo.mp4', makeLabel: 'druga kamera',
+        make: (c) => ['-i', c.input, '-vf', 'hflip,hue=s=0,eq=contrast=1.2', '-an', '-c:v', 'libx264', '-preset', 'ultrafast', 'pip_demo.mp4'] },
+      { id: 'pos', label: 'Pozycja', type: 'select', default: 'br', options: [['tl', 'Lewy górny'], ['tr', 'Prawy górny'], ['bl', 'Lewy dolny'], ['br', 'Prawy dolny']] },
+      { id: 'size', label: 'Szerokość okienka (% filmu)', type: 'range', min: 15, max: 50, step: 1, default: 30 },
+      { id: 'border', label: 'Biała ramka', type: 'toggle', default: true },
+    ],
+    build: (p, ctx) => {
+      const W = ctx.info.width || 1280;
+      const m = Math.max(8, Math.round(W * 0.025));
+      const pw = even((W * p.size) / 100);
+      const pos = { tl: [m, m], tr: [`W-w-${m}`, m], bl: [m, `H-h-${m}`], br: [`W-w-${m}`, `H-h-${m}`] }[p.pos];
+      const b = p.border ? `,pad=iw+8:ih+8:4:4:color=white` : '';
+      return {
+        segs: [IN(ctx, 'Wejście nr 0: główny film.'),
+          seg('in', ['-i', ctx.files.second], 'Wejście nr 1: obraz do okienka.'),
+          seg('filter', ['-filter_complex', `[1:v]scale=${pw}:-2${b}[p];[0:v][p]overlay=${pos[0]}:${pos[1]}:eof_action=pass[v]`],
+            `Zmniejsz drugie wejście do ${pw} px szerokości${p.border ? ', dodaj 4-pikselową białą ramkę' : ''} i połóż w rogu (x=${pos[0]}, y=${pos[1]}); gdy się skończy – zniknie.`),
+          seg('out', ['-map', '[v]', '-map', '0:a?'], 'Obraz z grafu + dźwięk z głównego filmu.'),
+          X264('veryfast', 20), ACOPY(ctx), FASTSTART, OUT('output.mp4')].filter(Boolean),
+        out: { file: 'output.mp4', kind: 'video' }, duration: dur(ctx),
+      };
+    },
+    check: VIDEO_ONLY,
+  },
+
+  // ─────────────────────────────── NOWE: czas
+  {
+    id: 'join',
+    group: 'time',
+    icon: 'chain',
+    title: 'Łączenie klipów i przejścia',
+    tagline: 'Sklej dwa nagrania – na cięcie albo z przejściem (wipe, circle, pixelize…).',
+    explain: `<p>Łączy dwa klipy w jeden. Możesz je skleić „na twardo” (cięcie) albo dodać jedno z kilkudziesięciu przejść: przenikanie, wycieranie, koło, piksele, przybliżenie…</p>
+      <p>Drugi klip zostanie automatycznie dopasowany do rozdzielczości i liczby klatek pierwszego (z czarnymi pasami, jeśli proporcje się różnią).</p>`,
+    how: `<p>Najpierw <b>normalizacja</b>: <code>scale</code> + <code>pad</code> sprowadzają oba obrazy do tego samego rozmiaru, <code>fps</code> – do tej samej liczby klatek, <code>format=yuv420p</code> – do tego samego formatu pikseli. Bez tego filtry łączące odmówią pracy.</p>
+      <p>Cięcie: filtr <code>concat</code> układa obraz i dźwięk jeden po drugim. Przejście: <code>xfade</code> miesza obrazy przez <code>duration</code> sekund, zaczynając w <code>offset</code> = długość pierwszego klipu − czas przejścia, a <code>acrossfade</code> robi to samo z dźwiękiem.</p>`,
+    demo: { params: { transition: 'circleopen', d: 1 }, note: 'Bez drugiego pliku demo dokleja fragment tego samego filmu w zmienionych kolorach. Przejście „circleopen” zaczyna się sekundę przed końcem pierwszego klipu – licznik czasu pokaże, gdzie.' },
+    params: [
+      { id: 'second', label: 'Drugi klip', type: 'file', accept: 'video/*', probe: true, hint: 'Bez pliku: 4-sekundowy fragment bieżącego filmu w innych kolorach.', fallback: 'clip2_demo.mp4', makeLabel: 'drugi klip',
+        make: (c) => ['-ss', '1', '-i', c.input, '-t', '4', '-vf', 'hue=h=150:s=1.3', '-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', 'clip2_demo.mp4'] },
+      { id: 'transition', label: 'Przejście', type: 'select', default: 'fade', options: [['cut', 'Brak – zwykłe cięcie (concat)'], ['fade', 'fade – przenikanie'], ['fadeblack', 'fadeblack – przez czerń'], ['wipeleft', 'wipeleft – wycieranie'], ['slideup', 'slideup – wsuwanie'], ['circleopen', 'circleopen – koło'], ['pixelize', 'pixelize – piksele'], ['radial', 'radial – wskazówka zegara'], ['zoomin', 'zoomin – przybliżenie'], ['dissolve', 'dissolve – rozpad']] },
+      { id: 'd', label: 'Czas przejścia (s)', type: 'range', min: 0.2, max: 2, step: 0.1, default: 1, when: (p) => p.transition !== 'cut' },
+    ],
+    validate: (p, ctx) => {
+      if (p.transition === 'cut') return null;
+      const d2 = ctx.infos.second?.duration || 0;
+      if (dur(ctx) <= p.d || (d2 && d2 <= p.d)) return 'Przejście jest dłuższe niż jeden z klipów.';
+      return null;
+    },
+    build: (p, ctx) => {
+      const W = ctx.info.width || 1280;
+      const H = ctx.info.height || 720;
+      const fps = ctx.info.fps || 25;
+      const i2 = ctx.infos.second || {};
+      const D0 = dur(ctx);
+      const D1 = i2.duration || 4;
+      const norm = (i) => `[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=${fps},format=yuv420p[v${i}]`;
+      const aud = (i, has, d) => (has ? `[${i}:a]aresample=48000,aformat=channel_layouts=stereo[a${i}]` : `anullsrc=r=48000:cl=stereo,atrim=duration=${num(d, 3)}[a${i}]`);
+      const parts = [norm(0), norm(1), aud(0, ctx.info.hasAudio, D0), aud(1, i2.hasAudio !== false, D1)];
+      let total;
+      if (p.transition === 'cut') {
+        parts.push('[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]');
+        total = D0 + D1;
+      } else {
+        const off = num(D0 - p.d, 3);
+        parts.push(`[v0][v1]xfade=transition=${p.transition}:duration=${num(p.d)}:offset=${off}[v]`, `[a0][a1]acrossfade=d=${num(p.d)}[a]`);
+        total = D0 + D1 - p.d;
+      }
+      return {
+        segs: [IN(ctx, 'Wejście nr 0: pierwszy klip.'), seg('in', ['-i', ctx.files.second], 'Wejście nr 1: drugi klip.'),
+          seg('filter', ['-filter_complex', parts.join(';')], p.transition === 'cut'
+            ? `Dopasuj oba obrazy do ${W}×${H} i ${fps} kl./s, ujednolić dźwięk (48 kHz stereo; brakujący zastąp ciszą), a potem sklej filtrem concat.`
+            : `Dopasuj oba obrazy do ${W}×${H} i ${fps} kl./s, ujednolić dźwięk, potem przejście xfade „${p.transition}” trwające ${num(p.d)} s od ${num(D0 - p.d, 2)} s i przenikanie dźwięku (acrossfade).`),
+          seg('out', ['-map', '[v]', '-map', '[a]'], 'Zapisz połączony obraz i dźwięk z grafu.'),
+          X264('veryfast', 20), seg('audio', ['-c:a', 'aac', '-b:a', '160k'], 'Dźwięk w AAC 160 kb/s.'), FASTSTART, OUT('output.mp4')],
+        out: { file: 'output.mp4', kind: 'video' }, duration: total,
+      };
+    },
+    check: (ctx) => VIDEO_ONLY(ctx) || NEEDS_DURATION(ctx),
+  },
+
+  // ─────────────────────────────── NOWE: dźwięk
+  {
+    id: 'music',
+    group: 'audio',
+    icon: 'music',
+    title: 'Podkład muzyczny',
+    tagline: 'Dodaj muzykę pod film – z automatycznym ściszaniem, gdy ktoś mówi.',
+    explain: `<p>Miksuje muzykę z oryginalnym dźwiękiem filmu. Możesz ustawić jej głośność, zapętlić krótki utwór na cały film i płynnie wyciszyć go na końcu.</p>
+      <p><b>Ducking</b> (automatyczne ściszanie) to trik z radia i podcastów: gdy w filmie pojawia się głos, muzyka sama robi się cichsza, a w przerwach wraca.</p>`,
+    how: `<p><code>-stream_loop -1</code> przed wejściem zapętla muzykę. <code>volume</code> ustala jej poziom, <code>afade</code> wycisza końcówkę, a <code>amix</code> łączy ścieżki (<code>duration=first</code> – tyle, ile trwa film).</p>
+      <p>Ducking robi <code>sidechaincompress</code>: kompresor działa na muzyce, ale „słucha” sygnału sterującego – kopii dźwięku z filmu (<code>asplit</code>). Gdy ten przekroczy próg, muzyka jest tłumiona w stosunku <code>ratio</code>.</p>
+      <p>Obraz jest kopiowany bez zmian (<code>-c:v copy</code>).</p>`,
+    demo: { params: { vol: 0.5, duck: true, loop: true, fadeout: true }, note: 'Bez własnego pliku demo generuje prostą melodię (aevalsrc). Pod odtwarzaczami porównaj kształt fali: muzyka wypełnia przerwy między piskami, a przy każdym pisku (ducking) przygasa.' },
+    params: [
+      { id: 'music', label: 'Plik z muzyką', type: 'file', accept: 'audio/*,video/*', probe: true, hint: 'Bez pliku: wygenerowana 8-sekundowa melodia.', fallback: 'music_demo.m4a', makeLabel: 'przykładowa melodia',
+        make: () => ['-f', 'lavfi', '-i', "aevalsrc='0.22*sin(2*PI*t*220*pow(2\\,floor(mod(t*4\\,4))*4/12))*exp(-3*mod(t*4\\,1))+0.06*sin(2*PI*t*110)':s=44100:d=8", '-c:a', 'aac', '-b:a', '128k', 'music_demo.m4a'] },
+      { id: 'vol', label: 'Głośność muzyki', type: 'range', min: 0.05, max: 1.5, step: 0.05, default: 0.35 },
+      { id: 'duck', label: 'Ściszaj muzykę, gdy słychać film (ducking)', type: 'toggle', default: true },
+      { id: 'loop', label: 'Zapętl muzykę na cały film', type: 'toggle', default: true },
+      { id: 'fadeout', label: 'Wycisz muzykę na końcu (2 s)', type: 'toggle', default: true },
+    ],
+    waveform: true,
+    build: (p, ctx) => {
+      const D = dur(ctx);
+      const mf = [`volume=${num(p.vol)}`, 'aresample=48000', 'aformat=channel_layouts=stereo'];
+      if (p.fadeout && D > 3) mf.push(`afade=t=out:st=${num(D - 2)}:d=2`);
+      const parts = [`[1:a]${mf.join(',')}[m]`];
+      if (!ctx.info.hasAudio) parts.push(`[m]atrim=duration=${num(D, 3)}[a]`);
+      else if (p.duck) parts.push('[0:a]aresample=48000,aformat=channel_layouts=stereo,asplit[voice][sc]', '[m][sc]sidechaincompress=threshold=0.04:ratio=10:attack=15:release=350[md]', '[voice][md]amix=inputs=2:duration=first:normalize=0[a]');
+      else parts.push('[0:a]aresample=48000,aformat=channel_layouts=stereo[voice]', '[voice][m]amix=inputs=2:duration=first:normalize=0[a]');
+      const video = ctx.info.hasVideo;
+      const file = video ? 'output.mp4' : 'output.m4a';
+      return {
+        segs: [IN(ctx, 'Wejście nr 0: film (obraz + dźwięk).'),
+          seg('in', [...(p.loop ? ['-stream_loop', '-1'] : []), '-i', ctx.files.music], `Wejście nr 1: muzyka${p.loop ? ', zapętlona w nieskończoność (-stream_loop -1)' : ''}.`),
+          seg('filter', ['-filter_complex', parts.join(';')], `Muzyka: głośność ×${num(p.vol)}${p.fadeout ? ', wyciszenie przez ostatnie 2 s' : ''}. ${!ctx.info.hasAudio ? 'Film nie ma dźwięku – muzyka staje się jedyną ścieżką.' : p.duck ? 'Kopia dźwięku filmu steruje kompresorem (sidechaincompress), który ścisza muzykę, gdy film „mówi”; potem amix łączy ścieżki.' : 'amix łączy dźwięk filmu z muzyką.'}`),
+          seg('out', [...(video ? ['-map', '0:v'] : []), '-map', '[a]', ...(video ? [] : ['-t', num(D, 3)])], 'Obraz z wejścia 0 i zmiksowany dźwięk z grafu.'),
+          video ? seg('video', ['-c:v', 'copy'], 'Obraz bez zmian (stream copy).') : null,
+          seg('audio', ['-c:a', 'aac', '-b:a', '192k'], 'Dźwięk w AAC 192 kb/s.'),
+          OUT(file)].filter(Boolean),
+        out: { file, kind: video ? 'video' : 'audio' }, duration: D,
+      };
+    },
+    check: NEEDS_DURATION,
   },
 
   // ─────────────────────────────── ZAAWANSOWANE

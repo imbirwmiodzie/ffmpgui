@@ -1,0 +1,20 @@
+# ffmpgui – skrypty AI do wideo (małe modele, działają na CPU)
+# Wymagany jest też FFmpeg w PATH (albo: pip install imageio-ffmpeg).
+# Instaluj tylko to, czego potrzebujesz – nagłówek każdego skryptu mówi, czego używa.
+
+numpy
+pillow
+opencv-python-headless>=4.8        # anonymize.py (YuNet), background.py, reframe.py, upscale.py
+
+faster-whisper>=1.0                # transcribe.py, lektor.py
+ultralytics>=8.3                   # detect.py, reframe.py  (YOLO11, licencja AGPL-3.0)
+lap                                # śledzenie obiektów (ByteTrack) w detect.py
+mediapipe>=0.10.14                 # background.py
+scenedetect>=0.6.4                 # scenes.py, describe.py
+torch                              # upscale.py, search.py, describe.py, lektor.py (wersja CPU wystarczy)
+spandrel                           # upscale.py (Real-ESRGAN)
+transformers>=4.50                 # search.py (CLIP), describe.py (SmolVLM2), lektor.py (MarianMT)
+sentencepiece                      # lektor.py (tokenizer MarianMT)
+sacremoses                         # lektor.py
+num2words                          # describe.py (procesor SmolVLM2)
+piper-tts>=1.3                     # lektor.py (synteza mowy)

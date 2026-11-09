@@ -1,0 +1,19 @@
+1
+00:00:00,020 --> 00:00:01,420
+Jesteś palantem, Tom.
+
+2
+00:00:01,420 --> 00:00:04,220
+Słuchaj, Celia, musimy śledzić nasze pasje.
+
+3
+00:00:04,220 --> 00:00:07,420
+Masz robotykę, a ja chcę być wspaniały w kosmosie?
+
+4
+00:00:07,420 --> 00:00:11,520
+Dlaczego po prostu nie przyznasz, że jesteś przerażony przez moją robotową rękę?
+
+5
+00:00:11,520 --> 00:00:13,520
+Nie jestem przerażona, ale to...

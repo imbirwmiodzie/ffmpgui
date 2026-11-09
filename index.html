@@ -19,6 +19,7 @@
       <nav class="nav-links" aria-label="Sekcje">
         <a href="#jak-to-dziala">Jak to działa</a>
         <a href="#funkcje">Funkcje</a>
+        <a href="#ai">AI w Pythonie</a>
         <a href="#slowniczek">Słowniczek</a>
         <a href="#faq">FAQ</a>
       </nav>
@@ -115,6 +116,28 @@
         <p class="section-lead">Każda karta ma <b>demo</b>: ffmpgui wygeneruje 6-sekundowy film testowy (kolorowe pasy, licznik czasu i pisk 440 Hz), przepuści go przez daną funkcję i pokaże wynik obok oryginału – razem z poleceniem i wyjaśnieniem każdej opcji.</p>
         <div class="feature-filter" id="featureFilter" role="tablist" aria-label="Filtruj funkcje"></div>
         <div class="feature-grid" id="featureGrid"></div>
+        <div class="more">
+          <h3 class="sub-h" style="margin-top:0">A to wciąż nie wszystko</h3>
+          <p class="muted" style="max-width:52em">FFmpeg ma ponad 500 filtrów, setki kodeków i formatów. Poniżej przepisy, których nie ma jeszcze w studiu – z gotowym poleceniem do skopiowania. Oznaczenie <span class="tag web">w przeglądarce</span> znaczy, że potrzebny filtr lub format jest w FFmpeg.wasm – przepisy na jednym pliku wypróbujesz od razu w polu „Własne polecenie”. <span class="tag native">natywny</span> wymaga zwykłego FFmpeg na komputerze, bo potrzebuje GPU, urządzeń albo kodeków, których nie ma w wersji WebAssembly. Pomysły na zadania, które wymagają <b>rozumienia</b> obrazu i mowy, są w sekcji <a href="#ai">AI w Pythonie</a>.</p>
+          <div class="more-grid">
+            <div class="more-item"><h4>Strumieniowanie HLS / DASH<span class="tag web">w przeglądarce</span></h4><p>Pocięcie filmu na kawałki + playlista .m3u8 – tak działa wideo na stronach i w aplikacjach (adaptacyjna jakość).</p><code>ffmpeg -i in.mp4 -c:v libx264 -c:a aac -f hls -hls_time 4 -hls_playlist_type vod out.m3u8</code></div>
+            <div class="more-item"><h4>Nagrywanie ekranu i kamery<span class="tag native">natywny</span></h4><p>Przechwytywanie pulpitu, okna, kamerki i mikrofonu – bez OBS.</p><code>ffmpeg -f x11grab -i :0.0 -f pulse -i default ekran.mp4   # Windows: gdigrab, macOS: avfoundation</code></div>
+            <div class="more-item"><h4>Akceleracja GPU<span class="tag native">natywny</span></h4><p>Kodowanie na karcie graficznej: 5–20× szybciej niż na CPU.</p><code>ffmpeg -hwaccel cuda -i in.mp4 -c:v h264_nvenc -preset p5 out.mp4   # Intel: h264_qsv, Mac: h264_videotoolbox</code></div>
+            <div class="more-item"><h4>Nowoczesne kodeki AV1 / VP9<span class="tag native">natywny</span></h4><p>Mniejsze pliki niż H.264 przy tej samej jakości (YouTube, Netflix).</p><code>ffmpeg -i in.mp4 -c:v libsvtav1 -crf 35 -preset 8 -c:a libopus out.webm</code></div>
+            <div class="more-item"><h4>Metadane, okładka, rozdziały<span class="tag web">w przeglądarce</span></h4><p>Tytuł, autor, okładka albumu w MP3/M4A, rozdziały w filmie z pliku tekstowego.</p><code>ffmpeg -i in.mp3 -i cover.jpg -map 0 -map 1 -c copy -disposition:v attached_pic -metadata title=&quot;Tytuł&quot; out.mp3</code></div>
+            <div class="more-item"><h4>Napisy jako osobna ścieżka<span class="tag web">w przeglądarce</span></h4><p>Napisy, które widz może włączyć/wyłączyć – bez wypalania w obrazie.</p><code>ffmpeg -i film.mp4 -i napisy.srt -c copy -c:s mov_text -metadata:s:s:0 language=pol out.mp4</code></div>
+            <div class="more-item"><h4>Wiele ścieżek audio<span class="tag web">w przeglądarce</span></h4><p>Kilka wersji językowych w jednym pliku i wybór, która ma być domyślna.</p><code>ffmpeg -i film.mp4 -i pl.m4a -map 0:v -map 0:a -map 1:a -c copy -disposition:a:1 default out.mkv</code></div>
+            <div class="more-item"><h4>Wykrywanie czerni i ciszy<span class="tag web">w przeglądarce</span></h4><p>Automatyczne znajdowanie przerw, plansz i reklam – np. do cięcia nagrań TV.</p><code>ffmpeg -i in.mp4 -vf blackdetect=d=0.5 -af silencedetect=n=-40dB:d=1 -f null -</code></div>
+            <div class="more-item"><h4>Wycinanie ciszy<span class="tag web">w przeglądarce</span></h4><p>Usunięcie przerw z nagrania głosu (podcast, wykład).</p><code>ffmpeg -i in.wav -af silenceremove=stop_periods=-1:stop_duration=0.6:stop_threshold=-40dB out.wav</code></div>
+            <div class="more-item"><h4>Pomiar głośności (EBU R128)<span class="tag web">w przeglądarce</span></h4><p>Raport LUFS / True Peak – sprawdzisz, czy materiał spełnia normy nadawców.</p><code>ffmpeg -i in.mp4 -af ebur128=peak=true -f null -</code></div>
+            <div class="more-item"><h4>Odszumianie mowy siecią RNNoise<span class="tag web">w przeglądarce</span></h4><p>Filtr arnndn z małym modelem sieci neuronowej usuwa szum tła z głosu.</p><code>ffmpeg -i in.wav -af arnndn=m=cb.rnnn out.wav</code></div>
+            <div class="more-item"><h4>Płynne slow-motion<span class="tag web">w przeglądarce</span></h4><p>Interpolacja ruchu: 30 → 60 kl./s bez „szarpania”.</p><code>ffmpeg -i in.mp4 -vf minterpolate=fps=60:mi_mode=mci out.mp4</code></div>
+            <div class="more-item"><h4>Profesjonalne LUT-y (.cube)<span class="tag web">w przeglądarce</span></h4><p>Gotowe looki kolorystyczne z programów do koloryzacji.</p><code>ffmpeg -i in.mp4 -vf lut3d=film.cube out.mp4</code></div>
+            <div class="more-item"><h4>Usuwanie przeplotu i HDR → SDR<span class="tag web">w przeglądarce</span></h4><p>Stare nagrania z TV (interlace) i filmy HDR na zwykłe ekrany.</p><code>ffmpeg -i in.ts -vf bwdif out.mp4   |   -vf zscale=t=linear:npl=100,tonemap=hable,zscale=t=bt709:m=bt709:p=bt709,format=yuv420p</code></div>
+            <div class="more-item"><h4>Timelapse ze zdjęć i zdjęcia z filmu<span class="tag web">w przeglądarce</span></h4><p>Sekwencja JPG → film i odwrotnie: film → klatka co sekundę.</p><code>ffmpeg -framerate 24 -i img_%04d.jpg -c:v libx264 -pix_fmt yuv420p timelapse.mp4</code></div>
+            <div class="more-item"><h4>Wizualizacje dźwięku<span class="tag web">w przeglądarce</span></h4><p>Spektrogram, fala, wektoroskop – np. na podcast do social mediów.</p><code>ffmpeg -i in.mp3 -filter_complex showspectrum=s=1280x720:mode=combined -c:a copy out.mp4</code></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -215,6 +238,50 @@
             </details>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── AI W PYTHONIE -->
+    <section class="section section-alt" id="ai">
+      <div class="wrap wrap-wide">
+        <p class="eyebrow">AI + Python</p>
+        <h2>Co da się zrobić z wideo małymi modelami AI?</h2>
+        <p class="section-lead">FFmpeg świetnie <b>przetwarza</b> obraz i dźwięk, ale go nie <b>rozumie</b>. Tu wchodzą małe modele – od 230 KB do 1 GB – które działają lokalnie na zwykłym laptopie, bez GPU i bez chmury. Poniżej mapa możliwości, a niżej laboratorium: 11 zadań z gotowymi skryptami z katalogu <code>python/</code> i <b>prawdziwymi wynikami</b> ich działania.</p>
+
+        <div class="ai-pipe" aria-label="Schemat: FFmpeg i model AI">
+          <div class="ai-step" style="--c:var(--c-in)"><b>FFmpeg</b><small>dekoduje plik</small></div>
+          <span class="ai-arrow">→</span>
+          <div class="ai-step" style="--c:var(--c-global)"><b>NumPy</b><small>klatki RGB / dźwięk 16 kHz</small></div>
+          <span class="ai-arrow">→</span>
+          <div class="ai-step" style="--c:var(--c-filter)"><b>Mały model</b><small>YOLO · Whisper · CLIP · VLM…</small></div>
+          <span class="ai-arrow">→</span>
+          <div class="ai-step" style="--c:var(--c-audio)"><b>Wynik</b><small>klatki · tekst · JSON · maski</small></div>
+          <span class="ai-arrow">→</span>
+          <div class="ai-step" style="--c:var(--c-out)"><b>FFmpeg</b><small>koduje + oryginalny dźwięk</small></div>
+        </div>
+        <p class="muted ai-pipe-note">Ramki płyną przez potoki (stdin/stdout) – bez plików pośrednich. Cały ten „klej” to ~150 linii w <a href="python/_common.py" target="_blank" rel="noopener"><code>python/_common.py</code></a>.</p>
+
+        <h3 class="sub-h">Mapa możliwości</h3>
+        <div class="ai-map" id="aiMap"></div>
+
+        <h3 class="sub-h" id="ai-lab">Laboratorium AI – prawdziwe wyniki</h3>
+        <p class="muted" style="max-width:52em">Każdy podgląd to nieobrobiony wynik skryptu uruchomionego na fragmencie otwartego filmu <i>Tears of Steel</i> na 4 rdzeniach CPU bez GPU. Prędkości są zmierzone, nie katalogowe.</p>
+        <div class="studio ai-lab">
+          <aside class="studio-nav" id="aiNav" aria-label="Zadania AI"></aside>
+          <article class="feature" id="aiPanel"></article>
+        </div>
+
+        <div class="ai-install card">
+          <div>
+            <h3>Uruchom u siebie</h3>
+            <p class="muted">Python 3.10+, FFmpeg w PATH. Modele pobiorą się same przy pierwszym uruchomieniu. Szczegóły i tabela prędkości: <a href="python/README.md" target="_blank" rel="noopener">python/README.md</a>.</p>
+          </div>
+<pre class="code">cd python
+python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -r requirements.txt
+python transcribe.py moj_film.mp4 --language pl --burn</pre>
+        </div>
+        <p class="muted credit">Materiał demo: <i>Tears of Steel</i> – (CC) Blender Foundation | mango.blender.org, licencja CC BY 3.0.</p>
       </div>
     </section>
 

@@ -1,6 +1,7 @@
 import { engine, quote, parseArgs } from './engine.js';
 import { FEATURES, GROUPS, CATEGORIES, byId, defaultParams, demoParams } from './features.js';
 import { icon } from './icons.js';
+import { initAI } from './ai.js';
 
 // ───────────────────────────────────────────── pomocnicze
 const $ = (s, el = document) => el.querySelector(s);
@@ -39,25 +40,35 @@ const state = {
   input: null, // { name, fsName, ext, size, url, info, probe, isSample, mime }
   sample: null, // Uint8Array
   fontReady: null,
-  logoFile: null, // { name, data }
+  extra: {}, // pliki dodatkowe wg id parametru: { name, fsName, data, info }
+  extraInfo: {}, // info o wygenerowanych plikach domyślnych
   running: false,
   done: new Set(),
   waveCache: new Map(),
   results: [],
 };
 
+// Parametry typu „file” = dodatkowe wejścia (logo, drugi klip, muzyka…). Gdy użytkownik nic nie wybierze,
+// funkcja dostaje plik domyślny (prm.fallback), generowany w przeglądarce przez prm.make.
+function fileParams(f) { return f.params.filter((p) => p.type === 'file'); }
+
 function ctx() {
   const inp = state.input;
-  return {
-    input: inp?.fsName || 'input.mp4',
-    ext: inp?.ext || 'mp4',
-    info: inp?.info || SAMPLE_INFO,
-    files: { logo: state.logoFile ? state.logoFile.fsName : 'logo.png' },
-  };
+  const files = {};
+  const infos = {};
+  for (const prm of fileParams(state.feature)) {
+    const ex = state.extra[prm.id];
+    files[prm.id] = ex ? ex.fsName : prm.fallback;
+    infos[prm.id] = (ex ? ex.info : state.extraInfo[prm.id]) || prm.fallbackInfo || SAMPLE_INFO;
+  }
+  return { input: inp?.fsName || 'input.mp4', ext: inp?.ext || 'mp4', info: inp?.info || SAMPLE_INFO, files, infos };
 }
 
-function sampleCtx() {
-  return { input: 'sample.mp4', ext: 'mp4', info: SAMPLE_INFO, files: { logo: 'logo.png' } };
+function sampleCtx(f) {
+  const files = {};
+  const infos = {};
+  for (const prm of f ? fileParams(f) : []) { files[prm.id] = prm.fallback; infos[prm.id] = prm.fallbackInfo || SAMPLE_INFO; }
+  return { input: 'sample.mp4', ext: 'mp4', info: SAMPLE_INFO, files, infos };
 }
 
 function buildFor(feature, params, c) {
@@ -98,7 +109,7 @@ function initHero() {
   const show = () => {
     const f = byId[ids[i % ids.length]];
     $('#heroTitle').textContent = f.title;
-    renderCommand($('#heroCmd'), $('#heroLegend'), buildFor(f, demoParams(f), sampleCtx()), { compact: true });
+    renderCommand($('#heroCmd'), $('#heroLegend'), buildFor(f, demoParams(f), sampleCtx(f)), { compact: true });
     i++;
   };
   show();
@@ -160,8 +171,10 @@ function initFeatureGrid() {
   filter.innerHTML = `<button class="chip active" data-g="all">Wszystkie (${FEATURES.length})</button>` +
     GROUPS.map((g) => `<button class="chip" data-g="${g.id}">${g.label}</button>`).join('');
   const grid = $('#featureGrid');
-  grid.innerHTML = FEATURES.map((f) => {
-    const b = buildFor(f, demoParams(f), sampleCtx());
+  const order = GROUPS.map((g) => g.id);
+  const sorted = [...FEATURES].sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
+  grid.innerHTML = sorted.map((f) => {
+    const b = buildFor(f, demoParams(f), sampleCtx(f));
     return `<article class="fcard" data-g="${f.group}">
       <div class="fcard-top"><span class="fcard-ico">${icon(f.icon)}</span><div><div class="fcard-group">${GROUPS.find((g) => g.id === f.group).label}</div><h3>${f.title}</h3></div></div>
       <p>${f.tagline}</p>
@@ -256,7 +269,7 @@ function renderParams() {
       case 'toggle':
         return `<div class="field field-toggle${full}"><label class="switch"><input type="checkbox" id="${id}" name="${prm.id}"${v ? ' checked' : ''}><span></span>${prm.label}</label>${hintHtml}</div>`;
       case 'file':
-        return `<div class="field full"><label for="${id}">${prm.label}${state.logoFile ? `<span class="muted">${esc(state.logoFile.name)}</span>` : ''}</label><input type="file" id="${id}" name="${prm.id}" accept="${prm.accept || ''}">${hintHtml}</div>`;
+        return `<div class="field full"><label for="${id}">${prm.label}${state.extra[prm.id] ? `<span class="muted">${esc(state.extra[prm.id].name)} <button type="button" class="link-btn" data-clear="${prm.id}">usuń</button></span>` : ''}</label><input type="file" id="${id}" name="${prm.id}" accept="${prm.accept || ''}">${hintHtml}</div>`;
       default:
         return '';
     }
@@ -274,8 +287,12 @@ function onParamInput(e) {
     const file = el.files[0];
     if (file) {
       file.arrayBuffer().then((buf) => {
-        state.logoFile = { name: file.name, fsName: `logo_user.${extOf(file.name) || 'png'}`, data: new Uint8Array(buf) };
+        const ex = { name: file.name, fsName: `${name}_user.${extOf(file.name) || 'bin'}`, data: new Uint8Array(buf), info: null };
+        state.extra[name] = ex;
+        renderParams();
         updateCommand();
+        // od razu sprawdź plik (rozdzielczość, długość, czy ma dźwięk), żeby polecenie było dokładne
+        if (prm.probe) engine.writeFile(ex.fsName, ex.data).then(() => engine.probe(ex.fsName)).then((pr) => { ex.info = probeToInfo(pr); updateCommand(); }).catch(() => {});
       });
     }
     return;
@@ -519,8 +536,27 @@ async function runDemo() {
   state.params = demoParams(f);
   renderParams();
   updateCommand();
-  if (f.id === 'watermark') state.logoFile = null;
+  for (const prm of fileParams(f)) delete state.extra[prm.id];
   await run({ demo: true });
+}
+
+// Zapisuje do MEMFS dodatkowy plik wybrany przez użytkownika albo generuje domyślny.
+async function prepareExtra(prm, c) {
+  const ex = state.extra[prm.id];
+  if (ex) {
+    await engine.writeFile(ex.fsName, ex.data);
+    if (prm.probe && !ex.info) ex.info = probeToInfo(await engine.probe(ex.fsName));
+    return;
+  }
+  setProgress(`Przygotowanie: ${prm.makeLabel || 'plik pomocniczy'}…`, null);
+  if (prm.make === 'logo') {
+    await engine.writeFile(prm.fallback, await makeDemoLogo());
+  } else if (typeof prm.make === 'function') {
+    await engine.deleteFile(prm.fallback);
+    const r = await engine.exec(prm.make(c), { label: 'extra' });
+    if (r.code !== 0) { const e = new Error(`Nie udało się przygotować pliku ${prm.fallback}.`); e.log = r.log; throw e; }
+  }
+  if (prm.probe) state.extraInfo[prm.id] = probeToInfo(await engine.probe(prm.fallback));
 }
 
 async function run({ demo = false } = {}) {
@@ -554,10 +590,7 @@ async function run({ demo = false } = {}) {
       if (!(await ensureFont())) throw Object.assign(new Error('Nie udało się pobrać czcionki potrzebnej do tekstu.'), { user: true });
     }
     for (const file of f.files?.(state.params) || []) await engine.writeFile(file.name, file.data);
-    if (f.id === 'watermark') {
-      if (state.logoFile) await engine.writeFile(state.logoFile.fsName, state.logoFile.data);
-      else await engine.writeFile('logo.png', await makeDemoLogo());
-    }
+    for (const prm of fileParams(f)) await prepareExtra(prm, c);
 
     const built = buildFor(f, state.params, ctx());
     const args = built.segs.flatMap((s) => s.a);
@@ -602,6 +635,7 @@ async function run({ demo = false } = {}) {
   } finally {
     $('#progress').hidden = true;
     setBusy(false);
+    updateCommand(); // pokaż dokładnie to polecenie, które się wykonało (z info o plikach dodatkowych)
   }
 }
 
@@ -664,7 +698,7 @@ function renderResult({ f, built, url, data, ext, outProbe, waves, elapsed, demo
       <h4><span class="ok">${icon('sparkles')}</span>${esc(f.title)} – gotowe w ${elapsed.toFixed(1)} s</h4>
       <span class="muted">${esc(downloadName)}</span>
     </div>
-    <div class="compare">
+    <div class="compare${outInfo.width && outInfo.height && outInfo.width / outInfo.height > 2.3 ? ' wide' : ''}">
       <figure><figcaption><span>Przed</span><span>${esc(inp.name)}</span></figcaption>${mediaHtml(inp.url, inputKind(inp), inp.mime, waves?.[0])}</figure>
       <figure><figcaption><span>Po</span><span>${esc(built.out.file)}</span></figcaption>${mediaHtml(url, outKind, MIME[ext], waves?.[1])}</figure>
     </div>
@@ -746,10 +780,15 @@ function init() {
   initFeatureGrid();
   initStudioNav();
   initEngineUI();
+  initAI({ onStudio: (id) => { if (byId[id]) { selectFeature(id); goStudio(); } } });
 
   $('#params').addEventListener('input', onParamInput);
   $('#params').addEventListener('change', (e) => { if (e.target.type === 'file' || e.target.tagName === 'SELECT' || e.target.type === 'checkbox') onParamInput(e); });
   $('#params').addEventListener('submit', (e) => e.preventDefault());
+  $('#params').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-clear]');
+    if (b) { delete state.extra[b.dataset.clear]; renderParams(); updateCommand(); }
+  });
   $('#runBtn').addEventListener('click', () => run());
   $('#demoBtn').addEventListener('click', () => runDemo());
   $('#copyCmd').addEventListener('click', () => copyCommand());
